@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { signOut } from "@/app/actions";
 
 const navItems = [
-  { label: "Home", href: "/", icon: "⌂" },
+  { label: "Home", href: "/dashboard", icon: "⌂" },
   { label: "My tasks", href: "/my-tasks", icon: "✓" },
 ];
 
@@ -15,7 +15,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-zinc-200 bg-white">
-        <Link href="/" className="flex items-center gap-2 px-5 py-4">
+        <Link href="/dashboard" className="flex items-center gap-2 px-5 py-4">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 text-sm font-bold text-white">
             T
           </span>
@@ -64,7 +64,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
             />
           </form>
           <Link
-            href="/"
+            href="/dashboard"
             className="ml-auto rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
           >
             + New project

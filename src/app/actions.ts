@@ -62,7 +62,7 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
     .returning({ id: users.id });
 
   await startSession(user.id);
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function signIn(_prev: AuthState, formData: FormData): Promise<AuthState> {
@@ -85,7 +85,7 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
   if (!ok) return { error: "Email or password is incorrect." };
 
   await startSession(user.id);
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function signOut() {
@@ -141,7 +141,7 @@ export async function deleteProject(formData: FormData) {
 
   await db.delete(projects).where(eq(projects.id, projectId));
   refreshAll();
-  redirect("/");
+  redirect("/dashboard");
 }
 
 // ---------- Members ----------

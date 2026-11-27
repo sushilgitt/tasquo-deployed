@@ -8,6 +8,6 @@ export const instant = false;
 
 export default async function SignUpPage() {
   await connection();
-  if (await getCurrentUser()) redirect("/");
+  if (await getCurrentUser()) redirect("/dashboard");
   return <AuthForm mode="sign-up" action={signUp} />;
 }

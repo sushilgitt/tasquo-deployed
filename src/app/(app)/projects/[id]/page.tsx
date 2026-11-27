@@ -75,7 +75,7 @@ export default async function ProjectPage({
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <div>
-        <Link href="/" className="text-sm font-medium text-zinc-500 hover:text-indigo-600">
+        <Link href="/dashboard" className="text-sm font-medium text-zinc-500 hover:text-indigo-600">
           ← All projects
         </Link>
       </div>

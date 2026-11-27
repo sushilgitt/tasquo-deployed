@@ -3,9 +3,18 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { comments, projects, sections, tasks } from "@/db/schema";
+import { comments, projectMembers, projects, sections, tasks, users } from "@/db/schema";
+import { getProjectRole } from "@/lib/access";
+import { requireUser } from "@/lib/auth";
 import { parseUuid } from "@/lib/form";
-import { addComment, deleteComment, deleteTask, updateTask } from "@/app/actions";
+import {
+  addComment,
+  createTask,
+  deleteComment,
+  deleteTask,
+  toggleTask,
+  updateTask,
+} from "@/app/actions";
 
 export const instant = false;
 
@@ -18,6 +27,7 @@ export default async function TaskPage({
   params: Promise<{ id: string }>;
 }) {
   await connection();
+  const user = await requireUser();
   const { id: rawId } = await params;
   const taskId = parseUuid(rawId);
   if (!taskId) notFound();
@@ -25,22 +35,51 @@ export default async function TaskPage({
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) notFound();
 
+  // Non-members get a 404 for tasks in projects they can't see.
+  const role = await getProjectRole(task.projectId, user.id);
+  if (!role) notFound();
+
   const [project] = await db.select().from(projects).where(eq(projects.id, task.projectId)).limit(1);
-  const [projectSections, taskComments] = await Promise.all([
+  const [projectSections, members, subtasks, taskComments, parent] = await Promise.all([
     db
       .select()
       .from(sections)
       .where(eq(sections.projectId, task.projectId))
       .orderBy(asc(sections.position), asc(sections.name)),
+    db
+      .select({ id: users.id, name: users.name })
+      .from(projectMembers)
+      .innerJoin(users, eq(users.id, projectMembers.userId))
+      .where(eq(projectMembers.projectId, task.projectId))
+      .orderBy(asc(users.name)),
+    db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.parentTaskId, taskId))
+      .orderBy(asc(tasks.createdAt)),
     db.select().from(comments).where(eq(comments.taskId, taskId)).orderBy(asc(comments.createdAt)),
+    task.parentTaskId
+      ? db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(eq(tasks.id, task.parentTaskId)).limit(1)
+      : Promise.resolve([]),
   ]);
+
+  const isOwner = role === "owner";
+  const subDone = subtasks.filter((s) => s.completed).length;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center gap-2 text-sm text-zinc-500">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
         <Link href={`/projects/${task.projectId}`} className="font-medium hover:text-indigo-600">
           ← {project?.name ?? "Project"}
         </Link>
+        {parent[0] && (
+          <>
+            <span>/</span>
+            <Link href={`/tasks/${parent[0].id}`} className="hover:text-indigo-600">
+              {parent[0].title}
+            </Link>
+          </>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -86,6 +125,51 @@ export default async function TaskPage({
           </form>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-zinc-900">
+                Subtasks <span className="font-normal text-zinc-400">({subDone}/{subtasks.length})</span>
+              </h2>
+            </div>
+
+            {subtasks.length > 0 && (
+              <ul className="mt-4 divide-y divide-zinc-100">
+                {subtasks.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 py-2.5">
+                    <form action={toggleTask}>
+                      <input type="hidden" name="taskId" value={s.id} />
+                      <input type="hidden" name="completed" value={String(s.completed)} />
+                      <button
+                        aria-label={s.completed ? "Mark incomplete" : "Mark complete"}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold ${
+                          s.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-zinc-300 hover:border-indigo-500"
+                        }`}
+                      >
+                        {s.completed ? "✓" : ""}
+                      </button>
+                    </form>
+                    <Link
+                      href={`/tasks/${s.id}`}
+                      className={`text-sm hover:underline ${s.completed ? "text-zinc-400 line-through" : "text-zinc-800"}`}
+                    >
+                      {s.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!task.parentTaskId && (
+              <form action={createTask} className="mt-4 flex gap-2">
+                <input type="hidden" name="projectId" value={task.projectId} />
+                <input type="hidden" name="parentTaskId" value={task.id} />
+                {task.sectionId && <input type="hidden" name="sectionId" value={task.sectionId} />}
+                <input name="title" required maxLength={200} placeholder="Add a subtask" className={`min-w-0 flex-1 ${fieldClass}`} />
+                <button className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Add</button>
+              </form>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="font-semibold text-zinc-900">
               Comments <span className="font-normal text-zinc-400">({taskComments.length})</span>
             </h2>
@@ -103,10 +187,12 @@ export default async function TaskPage({
                           <span className="font-medium text-zinc-700">{c.author ?? "Anonymous"}</span> ·{" "}
                           {c.createdAt.toLocaleString()}
                         </span>
-                        <form action={deleteComment}>
-                          <input type="hidden" name="commentId" value={c.id} />
-                          <button className="hover:text-red-600">Delete</button>
-                        </form>
+                        {(c.authorId === user.id || isOwner) && (
+                          <form action={deleteComment}>
+                            <input type="hidden" name="commentId" value={c.id} />
+                            <button className="hover:text-red-600">Delete</button>
+                          </form>
+                        )}
                       </div>
                       <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-800">{c.body}</p>
                     </div>
@@ -119,7 +205,6 @@ export default async function TaskPage({
 
             <form action={addComment} className="mt-6 grid gap-2 border-t border-zinc-100 pt-5">
               <input type="hidden" name="taskId" value={task.id} />
-              <input name="author" maxLength={200} placeholder="Your name (optional)" className={fieldClass} />
               <textarea
                 name="body"
                 required
@@ -129,7 +214,7 @@ export default async function TaskPage({
                 className={fieldClass}
               />
               <button className="justify-self-start rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">
-                Post comment
+                Post comment as {user.name}
               </button>
             </form>
           </section>
@@ -141,14 +226,14 @@ export default async function TaskPage({
           {/* These fields belong to the task form above; the HTML form attribute links them. */}
           <label className="grid gap-1.5">
             <span className="text-sm text-zinc-600">Assignee</span>
-            <input
-              form="task-form"
-              name="assignee"
-              maxLength={200}
-              defaultValue={task.assignee ?? ""}
-              placeholder="Unassigned"
-              className={fieldClass}
-            />
+            <select form="task-form" name="assigneeId" defaultValue={task.assigneeId ?? ""} className={fieldClass}>
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="grid gap-1.5">
@@ -170,7 +255,6 @@ export default async function TaskPage({
 
           <form action={deleteTask} className="border-t border-zinc-100 pt-5">
             <input type="hidden" name="taskId" value={task.id} />
-            <input type="hidden" name="projectId" value={task.projectId} />
             <button className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline">
               Delete task
             </button>

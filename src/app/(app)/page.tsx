@@ -1,47 +1,65 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { projects } from "@/db/schema";
-import { createProject } from "./actions";
+import { projectMembers, projects } from "@/db/schema";
+import { requireUser } from "@/lib/auth";
+import { createProject } from "@/app/actions";
 
 // Data comes from the database, so render per request instead of at build time.
 export const instant = false;
 
 export default async function HomePage() {
-  await connection(); // Render per request: the list comes from the database.
-  const allProjects = await db
-    .select()
-    .from(projects)
+  await connection();
+  const user = await requireUser();
+
+  const myProjects = await db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      description: projects.description,
+      createdAt: projects.createdAt,
+      role: projectMembers.role,
+    })
+    .from(projectMembers)
+    .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+    .where(eq(projectMembers.userId, user.id))
     .orderBy(desc(projects.createdAt));
 
   return (
     <div className="mx-auto max-w-6xl space-y-10">
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-indigo-600">Workspace</p>
+          <p className="text-sm font-medium text-indigo-600">Hi, {user.name.split(" ")[0]}</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-zinc-900">Projects</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            {allProjects.length} {allProjects.length === 1 ? "project" : "projects"}
+            {myProjects.length} {myProjects.length === 1 ? "project" : "projects"}
           </p>
         </div>
       </section>
 
-      {allProjects.length === 0 ? (
+      {myProjects.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center">
           <p className="font-medium text-zinc-900">No projects yet</p>
           <p className="mt-1 text-sm text-zinc-500">Create your first project below to start planning.</p>
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {allProjects.map((p) => (
+          {myProjects.map((p) => (
             <li key={p.id}>
               <Link
                 href={`/projects/${p.id}`}
                 className="group flex h-full flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-sm font-semibold text-indigo-600">
-                  {p.name.slice(0, 2).toUpperCase()}
+                <div className="flex items-center justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-sm font-semibold text-indigo-600">
+                    {p.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  {p.role === "owner" && (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                      Owner
+                    </span>
+                  )}
                 </div>
                 <h2 className="mt-4 font-semibold text-zinc-900 group-hover:text-indigo-700">{p.name}</h2>
                 <p className="mt-1 line-clamp-2 text-sm text-zinc-500">

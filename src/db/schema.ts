@@ -7,6 +7,7 @@ import {
   boolean,
   integer,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // Users are added with auth later; for now assignees are plain text names/ids.
@@ -40,7 +41,7 @@ export const tasks = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     sectionId: uuid("section_id").references(() => sections.id, { onDelete: "set null" }),
-    parentTaskId: uuid("parent_task_id").references((): any => tasks.id, {
+    parentTaskId: uuid("parent_task_id").references((): AnyPgColumn => tasks.id, {
       onDelete: "cascade",
     }),
     title: text("title").notNull(),

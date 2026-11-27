@@ -1,24 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Taskloom
+
+Taskloom is a small project and task tracker built with Next.js 16, React 19, Drizzle ORM and Postgres (Supabase).
 
 ## Getting Started
 
-First, run the development server:
+1. Install dependencies:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+   ```bash
+   npm install
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create a local environment file and fill in your Supabase connection strings:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+   ```bash
+   cp .env.example .env.local
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   - `DATABASE_URL`: the transaction pooler string (port 6543). Used by the app at runtime.
+   - `DATABASE_URL_DIRECT`: the session pooler string (port 5432). Used by migrations.
+
+   The app throws `DATABASE_URL is not set` at runtime if the variable is missing.
+
+3. Create the tables:
+
+   ```bash
+   npm run db:migrate
+   ```
+
+4. Start the development server and open [http://localhost:3000](http://localhost:3000):
+
+   ```bash
+   npm run dev
+   ```
+
+Other useful scripts:
+
+- `npm run keep-alive`: checks that the database is reachable.
+- `npm run db:studio`: opens Drizzle Studio to browse the data.
+- `npm run lint` and `npm run build`: lint and production build.
+
+Set the same environment variables in your hosting provider before deploying.
 
 ## Learn More
 

@@ -1,6 +1,6 @@
-# Taskloom
+# Tasque
 
-Taskloom is a small project and task tracker built with Next.js 16, React 19, Drizzle ORM and Postgres (Supabase).
+Tasque is a small project and task tracker built with Next.js 16, React 19, Drizzle ORM and Postgres (Supabase).
 
 ## Getting Started
 
